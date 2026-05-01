@@ -23,11 +23,53 @@ SIGNAL_MAX_WEIGHTS = {
     "ssh_bruteforce": 25,
     "malware_execution_pattern": 35,
     "multi_sensor_observed": 20,
-	"external_abuse_report": 45,
-"external_suspicious_report": 25,
-"external_low_risk_report": 5,
-"external_reputation_observed": 0,
-"external_high_confidence_abuse": 30,
+
+    "external_abuse_report": 45,
+    "external_suspicious_report": 25,
+    "external_low_risk_report": 5,
+    "external_reputation_observed": 0,
+    "external_high_confidence_abuse": 30,
+
+    "user_report": 15,
+    "user_ssh_bruteforce": 20,
+    "user_malware_report": 30,
+    "user_execution_report": 25,
+    "user_recon_report": 10,
+    "user_suspicious_login_pattern": 15,
+}
+
+
+USER_REPORT_MAP = {
+    "ssh_bruteforce": {
+        "signal_type": "user_ssh_bruteforce",
+        "score_weight": 20,
+        "severity": "high",
+        "label": "SSH Brute Force Attempt",
+    },
+    "malware": {
+        "signal_type": "user_malware_report",
+        "score_weight": 30,
+        "severity": "high",
+        "label": "Malware Download Attempt",
+    },
+    "execution": {
+        "signal_type": "user_execution_report",
+        "score_weight": 25,
+        "severity": "high",
+        "label": "Command Execution",
+    },
+    "recon": {
+        "signal_type": "user_recon_report",
+        "score_weight": 10,
+        "severity": "medium",
+        "label": "Reconnaissance Activity",
+    },
+    "login_pattern": {
+        "signal_type": "user_suspicious_login_pattern",
+        "score_weight": 15,
+        "severity": "medium",
+        "label": "Suspicious Login Pattern",
+    },
 }
 
 
@@ -125,6 +167,69 @@ def insert_signal(
             )
 
 
+def insert_user_report(indicator, report_type, description="", confidence="medium", email=None):
+    report_meta = USER_REPORT_MAP.get(report_type, {
+        "signal_type": "user_report",
+        "score_weight": 15,
+        "severity": "medium",
+        "label": "User Report",
+    })
+
+    confidence_value = {
+        "low": 40,
+        "medium": 65,
+        "high": 85,
+    }.get((confidence or "medium").lower(), 65)
+
+    evidence_text = description or f"User submitted report: {report_meta['label']}"
+
+    raw_event_id = insert_raw_event(
+        source="user_report",
+        source_type="community",
+        event_type=report_meta["signal_type"],
+        indicator=indicator,
+        confidence=confidence_value,
+        severity=report_meta["severity"],
+        evidence={
+            "report_type": report_type,
+            "description": description,
+            "email": email,
+            "label": report_meta["label"],
+        },
+        raw_data={
+            "indicator": indicator,
+            "report_type": report_type,
+            "description": description,
+            "confidence": confidence,
+            "email": email,
+        },
+    )
+
+    insert_signal(
+        indicator=indicator,
+        source="user_report",
+        signal_type=report_meta["signal_type"],
+        score_weight=report_meta["score_weight"],
+        confidence=confidence_value,
+        severity=report_meta["severity"],
+        evidence=evidence_text,
+        raw_event_id=raw_event_id,
+    )
+
+    result = calculate_reputation(indicator)
+
+    return {
+        "status": "success",
+        "message": "Intelligence report submitted",
+        "indicator": indicator,
+        "signal_type": report_meta["signal_type"],
+        "label": report_meta["label"],
+        "severity": report_meta["severity"],
+        "score": result["score"],
+        "verdict": result["verdict"],
+    }
+
+
 def calculate_reputation(indicator):
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -194,6 +299,8 @@ def calculate_reputation(indicator):
                     "sensitive_file_access",
                     "persistence_attempt",
                     "destructive_command",
+                    "user_malware_report",
+                    "user_execution_report",
                 ]
             )
 
@@ -204,6 +311,8 @@ def calculate_reputation(indicator):
                     "execution_attempt",
                     "ssh_bruteforce",
                     "multi_sensor_observed",
+                    "user_ssh_bruteforce",
+                    "user_suspicious_login_pattern",
                 ]
             )
 
@@ -212,7 +321,7 @@ def calculate_reputation(indicator):
                 confidence_label = "high"
             elif score >= 50 and (has_malware_chain or has_strong_attack_signal):
                 verdict = "malicious"
-                confidence_label = "medium"
+                confidence_label = "high" if score >= 80 else "medium"
             elif score >= 30:
                 verdict = "suspicious"
                 confidence_label = "medium"
@@ -265,6 +374,8 @@ def calculate_reputation(indicator):
                 "evidence": evidence,
                 "signal_types": sorted(list(grouped.keys())),
             }
+
+
 def get_ip_context(indicator):
     with get_conn() as conn:
         with conn.cursor() as cur:

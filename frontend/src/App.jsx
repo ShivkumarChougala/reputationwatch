@@ -9,6 +9,7 @@ import AttackTimeline from "./components/AttackTimeline";
 import IpContextPanel from "./components/IpContextPanel";
 import SourceBreakdown from "./components/SourceBreakdown";
 import SubmitReportForm from "./components/SubmitReportForm";
+import CommunityIntelligence from "./components/CommunityIntelligence";
 import UnknownIpState from "./components/UnknownIpState";
 import ApiAccessCard from "./components/ApiAccessCard";
 import { lookupIp } from "./services/api";
@@ -99,6 +100,7 @@ export default function App() {
                   <div>
                     <IpContextPanel data={result} />
                     <SourceBreakdown data={result} />
+                    <CommunityIntelligence data={result} />
                     <SubmitReportForm ip={result?.indicator} />
                     <ApiAccessCard ip={result?.indicator} />
                   </div>
