@@ -474,30 +474,51 @@ def submit_external_intel(report: ExternalIntelReport):
     }
 
 
+
 @router.get("/lookup/{indicator}")
 def lookup_indicator_flow(indicator: str):
-    conn = get_db_connection()
-    cur = conn.cursor()
+    indicator = indicator.strip()
 
-    cur.execute("""
-        SELECT
-            indicator,
-            score,
-            verdict,
-            confidence,
-            sources,
-            evidence,
-            last_updated
-        FROM reputation_scores
-        WHERE indicator = %s;
-    """, (indicator,))
+    def fetch_score():
+        conn = get_db_connection()
+        cur = conn.cursor()
 
-    score_row = cur.fetchone()
+        cur.execute("""
+            SELECT
+                indicator,
+                score,
+                verdict,
+                confidence,
+                sources,
+                evidence,
+                last_updated
+            FROM reputation_scores
+            WHERE indicator = %s;
+        """, (indicator,))
 
-    if not score_row:
+        row = cur.fetchone()
         cur.close()
         conn.close()
+        return row
 
+    score_row = fetch_score()
+
+    # If not found locally, try AbuseIPDB once and save result
+    if not score_row:
+        try:
+            from reputationwatch.sources.abuseipdb import check_ip
+            from reputationwatch.sync_external_intel import upsert_external_intel
+
+            external_data = check_ip(indicator)
+
+            if external_data:
+                upsert_external_intel(**external_data)
+                score_row = fetch_score()
+
+        except Exception as e:
+            print(f"[reputation lookup] External enrichment failed for {indicator}: {e}")
+
+    if not score_row:
         return {
             "data": {
                 "indicator": indicator,
@@ -506,6 +527,7 @@ def lookup_indicator_flow(indicator: str):
                 "verdict": "unknown",
                 "score": 0,
                 "message": "No reputation record found for this indicator.",
+                "external_intel": [],
                 "next_actions": [
                     "submit_user_report",
                     "check_external_sources",
@@ -513,6 +535,9 @@ def lookup_indicator_flow(indicator: str):
                 ]
             }
         }
+
+    conn = get_db_connection()
+    cur = conn.cursor()
 
     cur.execute("""
         SELECT
@@ -529,6 +554,54 @@ def lookup_indicator_flow(indicator: str):
     """, (indicator,))
 
     signals = cur.fetchall()
+
+    cur.execute("""
+        SELECT
+            provider,
+            provider_score,
+            provider_verdict,
+            categories,
+            country_code,
+            usage_type,
+            isp,
+            domain,
+            total_reports,
+            last_reported_at,
+            updated_at,
+            raw_response
+        FROM reputation_external_intel
+        WHERE indicator = %s
+        ORDER BY updated_at DESC;
+    """, (indicator,))
+
+    external_rows = cur.fetchall()
+
+    external_intel = []
+
+    for row in external_rows:
+        raw = row.get("raw_response") or {}
+        reports = raw.get("reports") or []
+        latest_report = ""
+
+        if reports:
+            latest_report = reports[0].get("comment") or ""
+            latest_report = " ".join(latest_report.split())
+            latest_report = latest_report[:300]
+
+        external_intel.append({
+            "provider": row["provider"],
+            "provider_score": row["provider_score"],
+            "provider_verdict": row["provider_verdict"],
+            "categories": row["categories"],
+            "country_code": row["country_code"],
+            "usage_type": row["usage_type"],
+            "isp": row["isp"],
+            "domain": row["domain"],
+            "total_reports": row["total_reports"],
+            "last_reported_at": row["last_reported_at"],
+            "updated_at": row["updated_at"],
+            "latest_report": latest_report,
+        })
 
     cur.close()
     conn.close()
@@ -556,8 +629,10 @@ def lookup_indicator_flow(indicator: str):
                 "high_signals": len([s for s in signals if s["severity"] == "high"]),
                 "medium_signals": len([s for s in signals if s["severity"] == "medium"]),
                 "low_signals": len([s for s in signals if s["severity"] == "low"]),
+                "external_sources": len(external_intel),
             },
             "signals": signals,
+            "external_intel": external_intel,
             "evidence": score_row["evidence"],
             "next_actions": [
                 "view_full_evidence",
@@ -567,3 +642,4 @@ def lookup_indicator_flow(indicator: str):
             "context": get_ip_context(indicator),
         }
     }
+
