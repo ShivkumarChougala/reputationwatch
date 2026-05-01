@@ -65,8 +65,11 @@ export default function App() {
         )}
 
         {status === "loading" && (
-          <div className="rw-status">
-            Checking reputation intelligence...
+          <div className="rw-status rw-loading">
+            <p>Checking internal intelligence...</p>
+            <p>Correlating attack signals...</p>
+            <p>Enriching from external threat intel...</p>
+            <p>Generating reputation verdict...</p>
           </div>
         )}
 

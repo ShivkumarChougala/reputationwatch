@@ -9,19 +9,22 @@ from reputationwatch.engine import (
 
 PROVIDER_SIGNAL_MAP = {
     "abuseipdb": {
-        "malicious": ("external_abuse_report", 35, "high"),
-        "suspicious": ("external_suspicious_report", 20, "medium"),
+        "malicious": ("external_abuse_report", 45, "high"),
+        "suspicious": ("external_suspicious_report", 25, "medium"),
         "low_risk": ("external_low_risk_report", 5, "low"),
+        "unknown": ("external_reputation_observed", 0, "low"),
     },
     "virustotal": {
         "malicious": ("external_malware_reputation", 35, "high"),
         "suspicious": ("external_suspicious_reputation", 20, "medium"),
         "low_risk": ("external_low_risk_report", 5, "low"),
+        "unknown": ("external_reputation_observed", 0, "low"),
     },
     "greynoise": {
         "malicious": ("external_known_bad_scanner", 30, "high"),
         "suspicious": ("external_known_scanner", 15, "medium"),
         "low_risk": ("external_noise_seen", 5, "low"),
+        "unknown": ("external_reputation_observed", 0, "low"),
     },
 }
 
@@ -36,6 +39,82 @@ def normalize_verdict(provider_score):
     if score > 0:
         return "low_risk"
     return "unknown"
+
+
+def build_external_evidence(
+    provider,
+    provider_score,
+    provider_verdict,
+    categories,
+    total_reports,
+    raw_response,
+):
+    latest_comment = ""
+
+    if raw_response and isinstance(raw_response, dict):
+        reports = raw_response.get("reports") or []
+        if reports:
+            latest_comment = reports[0].get("comment") or ""
+
+    if latest_comment:
+        latest_comment = " ".join(latest_comment.split())
+        latest_comment = latest_comment[:220]
+
+        return (
+            f"{provider} verdict={provider_verdict}, "
+            f"score={provider_score}, reports={total_reports}, "
+            f"categories={','.join(categories)} | "
+            f"latest_report='{latest_comment}'"
+        )
+
+    return (
+        f"{provider} verdict={provider_verdict}, "
+        f"score={provider_score}, reports={total_reports}, "
+        f"categories={','.join(categories)}"
+    )
+
+
+def signal_exists(indicator, source, signal_type, evidence):
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 1
+                FROM reputation_signals
+                WHERE indicator = %s
+                  AND source = %s
+                  AND signal_type = %s
+                  AND evidence = %s
+                LIMIT 1;
+            """, (indicator, source, signal_type, evidence))
+
+            return cur.fetchone() is not None
+
+
+def add_signal_once(
+    indicator,
+    source,
+    signal_type,
+    score_weight,
+    confidence,
+    severity,
+    evidence,
+    raw_event_id,
+):
+    if signal_exists(indicator, source, signal_type, evidence):
+        return False
+
+    insert_signal(
+        indicator=indicator,
+        source=source,
+        signal_type=signal_type,
+        score_weight=score_weight,
+        confidence=confidence,
+        severity=severity,
+        evidence=evidence,
+        raw_event_id=raw_event_id,
+    )
+
+    return True
 
 
 def upsert_external_intel(
@@ -53,8 +132,10 @@ def upsert_external_intel(
     raw_response=None,
 ):
     provider = provider.lower().strip()
+    provider_score = int(provider_score or 0)
+    total_reports = int(total_reports or 0)
     provider_verdict = provider_verdict or normalize_verdict(provider_score)
-    categories = categories or []
+    categories = [str(c) for c in (categories or [])]
     raw_response = raw_response or {}
 
     with get_conn() as conn:
@@ -128,40 +209,49 @@ def upsert_external_intel(
 
     signal_type, weight, severity = PROVIDER_SIGNAL_MAP.get(provider, {}).get(
         provider_verdict,
-        ("external_reputation_observed", 10, "medium")
+        ("external_reputation_observed", 0, "low")
     )
 
-    evidence = (
-        f"{provider} verdict={provider_verdict}, "
-        f"score={provider_score}, reports={total_reports}, "
-        f"categories={','.join(categories)}"
+    evidence = build_external_evidence(
+        provider=provider,
+        provider_score=provider_score,
+        provider_verdict=provider_verdict,
+        categories=categories,
+        total_reports=total_reports,
+        raw_response=raw_response,
     )
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT 1
-                FROM reputation_signals
-                WHERE indicator = %s
-                  AND source = %s
-                  AND signal_type = %s
-                  AND evidence = %s
-                LIMIT 1;
-            """, (indicator, provider, signal_type, evidence))
+    add_signal_once(
+        indicator=indicator,
+        source=provider,
+        signal_type=signal_type,
+        score_weight=weight,
+        confidence=80,
+        severity=severity,
+        evidence=evidence,
+        raw_event_id=raw_event_id,
+    )
 
-            exists = cur.fetchone() is not None
+    if (
+        provider == "abuseipdb"
+        and provider_score >= 90
+        and total_reports >= 100
+    ):
+        boost_evidence = (
+            f"High-confidence AbuseIPDB reputation: "
+            f"score={provider_score}, reports={total_reports}"
+        )
 
-            if not exists:
-                insert_signal(
-                    indicator=indicator,
-                    source=provider,
-                    signal_type=signal_type,
-                    score_weight=weight,
-                    confidence=80,
-                    severity=severity,
-                    evidence=evidence,
-                    raw_event_id=raw_event_id,
-                )
+        add_signal_once(
+            indicator=indicator,
+            source=provider,
+            signal_type="external_high_confidence_abuse",
+            score_weight=30,
+            confidence=90,
+            severity="high",
+            evidence=boost_evidence,
+            raw_event_id=raw_event_id,
+        )
 
     result = calculate_reputation(indicator)
     return result
@@ -171,8 +261,8 @@ if __name__ == "__main__":
     result = upsert_external_intel(
         indicator="8.8.8.8",
         provider="abuseipdb",
-        provider_score=10,
-        provider_verdict="low_risk",
+        provider_score=0,
+        provider_verdict="unknown",
         categories=["test"],
         total_reports=1,
         raw_response={"demo": True}

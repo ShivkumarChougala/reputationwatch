@@ -23,6 +23,11 @@ SIGNAL_MAX_WEIGHTS = {
     "ssh_bruteforce": 25,
     "malware_execution_pattern": 35,
     "multi_sensor_observed": 20,
+	"external_abuse_report": 45,
+"external_suspicious_report": 25,
+"external_low_risk_report": 5,
+"external_reputation_observed": 0,
+"external_high_confidence_abuse": 30,
 }
 
 
