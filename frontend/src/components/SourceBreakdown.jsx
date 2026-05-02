@@ -1,85 +1,98 @@
 export default function SourceBreakdown({ data }) {
-  const sources = data?.sources || [];
   const signals = data?.signals || [];
   const externalIntel = data?.external_intel || [];
 
-  function sourceSignals(source) {
-    return signals.filter((s) => s.source === source);
-  }
+  const rawSources = data?.sources || [];
+  const sources = rawSources.filter((s) =>
+    signals.some((sig) => sig.source === s)
+  );
 
-  function shortText(text, max = 90) {
+  // 🔥 FIX: only show external checks if real data exists
+  const externalChecks = externalIntel.filter((intel) => {
+    const hasSignal = sources.includes(intel.provider);
+
+    const hasRealData =
+      (intel.provider_score || 0) > 0 ||
+      (intel.total_reports || 0) > 0 ||
+      intel.latest_report;
+
+    return !hasSignal && hasRealData;
+  });
+
+  const sourceSignals = (source) => signals.filter((s) => s.source === source);
+
+  const truncate = (text = "", max = 130) => {
     if (!text) return "";
-    return text.length > max ? text.slice(0, max) + "..." : text;
-  }
+    return text.length > max ? text.slice(0, max).trim() + "..." : text;
+  };
 
-  function getGhosttrapSummary() {
-    const ghostSignals = sourceSignals("ghosttrap");
+  const formatProvider = (p = "") =>
+    p.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-    const lastSignal = ghostSignals[0];
-    const riskTypes = ghostSignals
-      .map((s) => s.signal_type?.replaceAll("_", " "))
-      .filter(Boolean)
-      .slice(0, 2)
-      .join(" + ");
-
-    return {
-      count: ghostSignals.length,
-      last: lastSignal?.evidence || "",
-      risk: riskTypes || "behavior observed",
-    };
-  }
+  const getSourceMeta = (source) => ({
+    label: `${sourceSignals(source).length} signals`,
+    latest: sourceSignals(source).at(-1)?.evidence || "Activity observed.",
+  });
 
   return (
     <div className="rw-card">
-      <h3>Sources</h3>
+      <div className="rw-section-header">
+        <div>
+          <h3>Sources</h3>
+          <p className="rw-muted">
+            Risk-contributing sources and external checks.
+          </p>
+        </div>
+      </div>
 
-      {sources.length === 0 ? (
-        <p className="rw-muted">No sources available.</p>
-      ) : (
-        sources.map((source) => {
-          const intel = externalIntel.find((i) => i.provider === source);
-          const sourceCount = sourceSignals(source).length;
-          const ghost = source === "ghosttrap" ? getGhosttrapSummary() : null;
+      {sources.length > 0 ? (
+        <div className="rw-source-list">
+          {sources.map((source) => {
+            const meta = getSourceMeta(source);
 
-          return (
-            <div className="rw-source-row" key={source}>
-              <div>
-                <b>{source}</b>
-
-                {intel && (
-                  <>
-                    <span className="rw-muted">
-                      {" "}· {intel.total_reports} reports
-                    </span>
-                    {intel.latest_report && (
-                      <div className="rw-source-detail">
-                        last: {shortText(intel.latest_report)}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {ghost && (
-                  <>
-                    <span className="rw-muted">
-                      {" "}· {ghost.count} behaviors
-                    </span>
-                    <div className="rw-source-detail">
-                      risk: {ghost.risk}
-                    </div>
-                    {ghost.last && (
-                      <div className="rw-source-detail">
-                        last: {shortText(ghost.last)}
-                      </div>
-                    )}
-                  </>
-                )}
+            return (
+              <div className="rw-source-item" key={source}>
+                <div>
+                  <strong>{source}</strong>
+                  <span className="rw-source-meta"> · {meta.label}</span>
+                  <div className="rw-source-last">
+                    last: {truncate(meta.latest)}
+                  </div>
+                </div>
               </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="rw-empty-text">
+          No source contributed risk to this verdict.
+        </p>
+      )}
 
-              <span className="rw-muted">{sourceCount} signals</span>
-            </div>
-          );
-        })
+      {externalChecks.length > 0 && (
+        <>
+          <div className="rw-mini-header" style={{ marginTop: "18px" }}>
+            <h4>External Checks</h4>
+            <p>Providers checked without increasing risk.</p>
+          </div>
+
+          <div className="rw-source-list">
+            {externalChecks.map((intel) => (
+              <div className="rw-source-item" key={intel.provider}>
+                <div>
+                  <strong>{formatProvider(intel.provider)}</strong>
+                  <span className="rw-source-meta">
+                    {" "}
+                    · {intel.total_reports} reports
+                  </span>
+                  <div className="rw-source-last">
+                    {truncate(intel.latest_report)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

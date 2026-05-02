@@ -9,7 +9,6 @@ import AttackTimeline from "./components/AttackTimeline";
 import IpContextPanel from "./components/IpContextPanel";
 import SourceBreakdown from "./components/SourceBreakdown";
 import SubmitReportForm from "./components/SubmitReportForm";
-import CommunityIntelligence from "./components/CommunityIntelligence";
 import UnknownIpState from "./components/UnknownIpState";
 import ApiAccessCard from "./components/ApiAccessCard";
 import { lookupIp } from "./services/api";
@@ -20,6 +19,20 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
+
+  async function fetchLookup(targetIp = result?.indicator || ip) {
+    const cleanIp = String(targetIp || "").trim();
+
+    if (!cleanIp) return;
+
+    try {
+      const response = await lookupIp(cleanIp);
+      setResult(response?.data || response);
+      setStatus("success");
+    } catch (err) {
+      console.error("Refresh lookup failed:", err);
+    }
+  }
 
   async function handleLookup(e) {
     e.preventDefault();
@@ -100,8 +113,7 @@ export default function App() {
                   <div>
                     <IpContextPanel data={result} />
                     <SourceBreakdown data={result} />
-                    <CommunityIntelligence data={result} />
-                    <SubmitReportForm ip={result?.indicator} />
+                    <SubmitReportForm ip={result?.indicator} onSubmitted={() => fetchLookup(result?.indicator)} />
                     <ApiAccessCard ip={result?.indicator} />
                   </div>
                 </div>

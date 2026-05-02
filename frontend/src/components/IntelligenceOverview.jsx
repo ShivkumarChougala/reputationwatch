@@ -8,7 +8,7 @@ export default function IntelligenceOverview({ data }) {
     },
     {
       label: "Critical",
-      value: summary.critical ?? 0,
+      value: summary.critical_signals ?? 0,
     },
     {
       label: "Verdict",

@@ -15,7 +15,7 @@ export default function SignalEvidenceTable({ data }) {
       const match = evidence.match(/latest_report='([^']+)'/);
       let text = match?.[1] || getExternalLatest(source) || "";
 
-      if (!text) return "External abuse reported";
+      if (!text) return "No abuse reports found";
 
       // Remove ISO timestamp at start
       text = text.replace(/^\d{4}-\d{2}-\d{2}T.*?\s/, "");

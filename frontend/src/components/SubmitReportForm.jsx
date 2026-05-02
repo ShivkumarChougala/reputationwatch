@@ -1,71 +1,107 @@
 import { useState } from "react";
-import { submitReport } from "../services/api";
 
-export default function SubmitReportForm({ ip }) {
-  const [type, setType] = useState("ssh_bruteforce");
+export default function SubmitReportForm({ ip, onSubmitted }) {
+  const [reportType, setReportType] = useState("ssh_bruteforce");
   const [description, setDescription] = useState("");
-  const [reporter, setReporter] = useState("");
-  const [status, setStatus] = useState("idle");
+  const [confidence, setConfidence] = useState("high");
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
+  const [statusType, setStatusType] = useState("");
+
+  const handleSubmit = async () => {
+    if (!description.trim()) {
+      setStatus("Please describe what you observed.");
+      setStatusType("error");
+      return;
+    }
 
     try {
-      setStatus("loading");
+      setLoading(true);
+      setStatus("");
+      setStatusType("");
 
-      await submitReport({
-        indicator: ip,
-        report_type: type,
-        description,
-        reporter_email: reporter || null,
+      const res = await fetch("https://api.thechougala.in/api/v1/reputation/reports", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          indicator: ip,
+          report_type: reportType,
+          description,
+          confidence,
+        }),
       });
 
+      if (!res.ok) throw new Error();
+
+      setStatus("Intelligence submitted successfully.");
+      setStatusType("success");
       setDescription("");
-      setReporter("");
-      setStatus("success");
+
+      if (onSubmitted) onSubmitted();
+
     } catch {
-      setStatus("error");
+      setStatus("Submission failed. Try again.");
+      setStatusType("error");
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="rw-card">
-      <h3>Submit Additional Report</h3>
+      <div className="rw-mini-header">
+        <h4>Submit Intelligence</h4>
+        <p>Report observed activity for <b>{ip}</b></p>
+      </div>
 
-      <form className="rw-form" onSubmit={handleSubmit}>
-        <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="ssh_bruteforce">SSH brute force</option>
-          <option value="scanner">Scanner</option>
-          <option value="malware_hosting">Malware hosting</option>
-          <option value="abuse_source">Abuse source</option>
-        </select>
+      <select
+        value={reportType}
+        onChange={(e) => setReportType(e.target.value)}
+        className="rw-input"
+      >
+        <option value="ssh_bruteforce">SSH Brute Force</option>
+        <option value="malware">Malware Download</option>
+        <option value="execution">Command Execution</option>
+        <option value="recon">Recon Activity</option>
+      </select>
 
-        <textarea
-          rows="5"
-          placeholder="Describe what you observed..."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          required
-        />
+      <textarea
+        placeholder="Describe what you observed..."
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        className="rw-input"
+        style={{ marginTop: "10px" }}
+      />
 
-        <input
-          placeholder="Your email optional"
-          value={reporter}
-          onChange={(e) => setReporter(e.target.value)}
-        />
+      <select
+        value={confidence}
+        onChange={(e) => setConfidence(e.target.value)}
+        className="rw-input"
+        style={{ marginTop: "10px" }}
+      >
+        <option value="low">Low Confidence</option>
+        <option value="medium">Medium Confidence</option>
+        <option value="high">High Confidence</option>
+      </select>
 
-        <button type="submit" disabled={status === "loading"}>
-          {status === "loading" ? "Submitting..." : "Submit Report"}
-        </button>
-      </form>
+      <button
+        onClick={handleSubmit}
+        className="rw-button-primary"
+        style={{ marginTop: "12px", width: "100%" }}
+        disabled={loading}
+      >
+        {loading ? "Submitting..." : "Submit Intelligence"}
+      </button>
 
-      {status === "success" && (
-        <p className="rw-success">Report submitted successfully.</p>
+      {status && (
+        <div className={`rw-submit-status rw-submit-${statusType}`}>
+          {status}
+        </div>
       )}
 
-      {status === "error" && (
-        <p className="rw-error">Report submission failed.</p>
-      )}
     </div>
   );
 }
