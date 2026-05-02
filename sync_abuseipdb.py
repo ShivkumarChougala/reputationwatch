@@ -30,7 +30,7 @@ def fetch_candidate_ips(limit=50):
             return [row[0] for row in cur.fetchall()]
 
 
-def sync_abuseipdb(limit=25, sleep_seconds=1):
+def sync_abuseipdb(limit=10, sleep_seconds=2):
     ips = fetch_candidate_ips(limit)
 
     print(f"[+] Found {len(ips)} stale/new candidate IPs")
@@ -80,4 +80,4 @@ def sync_abuseipdb(limit=25, sleep_seconds=1):
 
 
 if __name__ == "__main__":
-    sync_abuseipdb(limit=25)
+    sync_abuseipdb(limit=10, sleep_seconds=2)

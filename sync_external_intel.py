@@ -221,16 +221,31 @@ def upsert_external_intel(
         raw_response=raw_response,
     )
 
-    add_signal_once(
-        indicator=indicator,
-        source=provider,
-        signal_type=signal_type,
-        score_weight=weight,
-        confidence=80,
-        severity=severity,
-        evidence=evidence,
-        raw_event_id=raw_event_id,
-    )
+    # Enterprise rule:
+    # Store clean / unknown external checks as context only.
+    # Do NOT create reputation signal evidence unless the provider observed risk.
+    if provider == "abuseipdb":
+        should_create_signal = (
+            provider_verdict in ("malicious", "suspicious", "low_risk")
+            and provider_score > 0
+        )
+    else:
+        should_create_signal = (
+            provider_verdict in ("malicious", "suspicious", "low_risk")
+            and (provider_score > 0 or total_reports > 0 or categories)
+        )
+
+    if should_create_signal:
+        add_signal_once(
+            indicator=indicator,
+            source=provider,
+            signal_type=signal_type,
+            score_weight=weight,
+            confidence=80,
+            severity=severity,
+            evidence=evidence,
+            raw_event_id=raw_event_id,
+        )
 
     if (
         provider == "abuseipdb"
@@ -263,8 +278,8 @@ if __name__ == "__main__":
         provider="abuseipdb",
         provider_score=0,
         provider_verdict="unknown",
-        categories=["test"],
-        total_reports=1,
+        categories=[],
+        total_reports=0,
         raw_response={"demo": True}
     )
     print(result)

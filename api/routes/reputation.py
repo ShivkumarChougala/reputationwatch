@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 from psycopg2.extras import Json
-from reputationwatch.engine import calculate_reputation, get_ip_context
+from reputationwatch.engine import calculate_reputation, get_ip_context, insert_user_report, insert_user_report
 from fastapi.responses import PlainTextResponse
 
 from database.db import get_db_connection
@@ -639,7 +639,54 @@ def lookup_indicator_flow(indicator: str):
                 "submit_additional_report",
                 "export_indicator"
             ],
-            "context": get_ip_context(indicator),
+            "context": get_or_enrich_ip_context(indicator),
         }
     }
+
+
+
+class UserReportRequest(BaseModel):
+    indicator: str
+    report_type: str
+    description: str = ""
+    confidence: str = "medium"
+    email: str | None = None
+
+
+REPORT_TYPE_MAP = {
+    "ssh_bruteforce": "SSH Brute Force Attempt",
+    "malware": "Malware Download Attempt",
+    "execution": "Command Execution",
+    "recon": "Reconnaissance Activity",
+    "login_pattern": "Suspicious Login Pattern",
+}
+
+
+@router.post("/reports")
+def submit_reputation_report(data: UserReportRequest):
+    return insert_user_report(
+        indicator=data.indicator,
+        report_type=data.report_type,
+        description=data.description,
+        confidence=data.confidence,
+        email=data.email,
+    )
+
+
+def get_or_enrich_ip_context(indicator: str):
+    context = get_ip_context(indicator)
+
+    # if already has data → return
+    if context and any(context.get(k) for k in ["country", "asn", "isp", "org"]):
+        return context
+
+    # otherwise enrich
+    try:
+        from database.ip_enrich import enrich_ip
+        enrich_ip(indicator)
+    except Exception as e:
+        print(f"[reputation lookup] IP context enrichment failed for {indicator}: {e}")
+
+    # fetch again after enrichment
+    return get_ip_context(indicator)
 
