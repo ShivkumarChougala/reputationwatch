@@ -1,129 +1,61 @@
 # ReputationWatch
 
-> Explainable IP Reputation Intelligence powered by real attacker telemetry.
+> Your reputation is only as good as your last IP address.
 
-ReputationWatch is an enterprise-grade IP reputation platform that analyzes attacker behavior, external intelligence, and user reports to produce transparent, evidence-backed security verdicts.
+ReputationWatch is an IP reputation system that analyzes attacker behavior, external intelligence, and user reports to produce evidence-based security assessments.
 
-Built on top of the GhostTrap honeypot network, it transforms raw attack data into actionable threat intelligence.
-
----
-
-## 🚀 Overview
-
-ReputationWatch aggregates and analyzes multiple intelligence sources:
-
-* First-party attacker telemetry (GhostTrap honeypots)
-* External threat intelligence (AbuseIPDB, VirusTotal, etc.)
-* Community/user reports
-* Behavioral signal analysis (commands, payloads, persistence attempts)
-
-It produces:
-
-* Reputation Score (0–100)
-* Verdict (safe / suspicious / malicious)
-* Confidence Level
-* Explainable Evidence (why the verdict was assigned)
+It is built on top of the GhostTrap honeypot network.
 
 ---
 
-## 🔍 Key Features
+## Overview
 
-### IP Reputation Lookup
+ReputationWatch processes data from:
 
-* Real-time IP analysis
-* Multi-source intelligence aggregation
-* Context enrichment (ASN, ISP, geo, timezone)
+* GhostTrap honeypot telemetry
+* External intelligence providers
+* User-submitted reports
 
-### Explainable Scoring Engine
+The system converts this data into signals and evaluates them to produce:
 
-* Signal-based scoring (not black-box)
-* Weighted threat categories:
-
-  * Reconnaissance
-  * Payload download
-  * Execution attempts
-  * Persistence techniques
-  * Destructive behavior
-* Transparent reasoning output
-
-### Threat Intelligence Pipeline
-
-* Syncs attacker commands → converts to signals
-* Ingests external intelligence providers
-* Merges signals into a unified model
-
-### Evidence & Timeline
-
-* Attack timeline visualization
-* Signal breakdown by severity
-* Source attribution (GhostTrap, external, user)
-
-### Community Reporting
-
-* Users can submit abuse reports
-* Reports directly influence reputation scoring
-
-### Blocklist Generation
-
-* Export high-risk IPs
-* Ready-to-use blocklist endpoint
+* A reputation score (0–100)
+* A classification (safe, low risk, suspicious, malicious)
+* A confidence level
+* An explanation of contributing factors
 
 ---
 
-## 🧠 How It Works
+## Features
+
+* IP reputation lookup with supporting evidence
+* Signal-based scoring model
+* Integration with external intelligence sources
+* User report ingestion
+* Blocklist generation
+
+---
+
+## How it works
 
 ```
-GhostTrap Sensors
-        │
-        ▼
-Raw Attack Telemetry
-        │
-        ▼
-Signal Classification Engine
-        │
-        ├── External Intelligence APIs
-        │
-        ▼
-Reputation Engine
-        │
-        ▼
-Score + Verdict + Explanation
-        │
-        ▼
-API + Dashboard
+GhostTrap Sensors → Telemetry → Signal Processing → Scoring → API
 ```
 
 ---
 
-## ⚙️ Tech Stack
+## API
 
-### Backend
-
-* Python (FastAPI)
-* PostgreSQL
-* Psycopg2
-
-### Frontend
-
-* React (Vite)
-* Recharts
-
-### Intelligence Sources
-
-* GhostTrap (first-party)
-* AbuseIPDB
-* VirusTotal (planned)
-* GreyNoise (planned)
-
----
-
-## 📡 API Example
-
-### Lookup IP
+### Lookup
 
 GET /api/v1/reputation/lookup/{ip}
 
-### Response
+### Example (curl)
+
+```bash
+curl -s "https://api.thechougala.in/api/v1/reputation/lookup/87.121.84.136"
+```
+
+### Response (trimmed)
 
 ```json
 {
@@ -131,66 +63,21 @@ GET /api/v1/reputation/lookup/{ip}
   "score": 100,
   "verdict": "malicious",
   "confidence": "high",
-  "sources": ["ghosttrap"],
-  "explanation": "Strong attacker behavior including payload execution and destructive commands.",
+  "sources": ["abuseipdb", "ghosttrap", "user_report"],
   "summary": {
-    "total_signals": 8,
-    "critical_signals": 3,
-    "high_signals": 2
+    "total_signals": 14,
+    "critical_signals": 2,
+    "high_signals": 10
   }
 }
 ```
 
 ---
 
-## 🧩 Signal Types
-
-* system_reconnaissance
-* payload_download
-* execution_attempt
-* sensitive_file_access
-* persistence_attempt
-* destructive_command
-* ssh_bruteforce
-* external_abuse_report
-
-Each signal contributes to the final score with capped weights.
-
----
-
-## 🔐 Why ReputationWatch?
-
-Most reputation systems are black boxes.
-
-ReputationWatch is different:
-
-* Explainable decisions
-* Real attacker behavior (not just passive data)
-* Multi-source intelligence
-* Designed for SOC / security teams
-
----
-
-## 🌐 Live Demo
-
-https://reputation.thechougala.in/
-
----
-
-## 🌐 Use Cases
-
-* Firewall / WAF blocking decisions
-* SOC investigation workflows
-* Threat intelligence enrichment
-* Security dashboards
-* API-based integrations
-
----
-
-## 🛠️ Installation (Dev)
+## Getting Started
 
 ```bash
-git clone https://github.com/yourusername/reputationwatch.git
+git clone https://github.com/ShivkumarChougala/reputationwatch.git
 cd reputationwatch
 
 python3 -m venv venv
@@ -203,7 +90,7 @@ uvicorn api.main:app --reload
 
 ---
 
-## 🔄 Workers
+## Background Jobs
 
 ```bash
 python3 -m reputationwatch.sync_commands
@@ -212,37 +99,6 @@ python3 -m reputationwatch.sync_external_intel
 
 ---
 
-## 📊 Roadmap
-
-* Machine learning-based scoring
-* Botnet classification
-* Real-time streaming signals
-* Multi-tenant SaaS dashboard
-* API key management & billing
-* Global sensor deployment system
-
----
-
-## 🧪 Project Status
-
-Active development — building towards a full enterprise threat intelligence platform.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome. Please open issues or submit pull requests.
-
----
-
-## 📜 License
+## License
 
 MIT License
-
----
-
-## 🔥 Vision
-
-ReputationWatch aims to become:
-
-The most transparent and behavior-driven IP reputation system on the internet.
